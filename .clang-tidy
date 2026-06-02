@@ -1,0 +1,38 @@
+---
+Checks: "bugprone-*,
+         cert-*,
+         -cert-dcl58-cpp,
+         cppcoreguidelines-*,
+         google-*,
+         hicpp-*,
+         -hicpp-signed-bitwise,
+         llvm-*,
+         modernize-*,
+         -modernize-use-trailing-return-type,
+         performance-*,
+         portability-*,
+         readability-*,
+         -readability-convert-member-functions-to-static,
+         -readability-redundant-access-specifiers,
+         -readability-identifier-length,
+         -bugprone-easily-swappable-parameters,
+         -portability-avoid-pragma-once,
+         -llvm-header-guard,
+         -clang-diagnostic-unknown-warning-option,
+         -clang-diagnostic-unknown-argument,
+         -clang-diagnostic-error,
+         -misc-include-cleaner"
+
+WarningsAsErrors: ''
+HeaderFileExtensions: ['', 'h', 'hh', 'hpp', 'hxx']
+ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx']
+HeaderFilterRegex: "^D:/code/vulkan/tutorial-final/(src|libs)/.*"
+FormatStyle: file
+
+CheckOptions:
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: 'x|y|z'
+  - key: readability-identifier-length.IgnoredParameterNames
+    value: 'x|y|z'
+  - key: "clang-tidy.*.IgnoreSystemIncludes"
+    value: "true"
