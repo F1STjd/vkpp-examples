@@ -103,7 +103,7 @@ app::check_window_vulkan_extensions_support(
       [](vk::Result result) -> std::string { return vk::to_string(result); })
     .and_then(
       [ &instance_extensions ](
-        const std::vector<vk::ExtensionProperties>& vulkan_extensions)
+        std::span<const vk::ExtensionProperties> vulkan_extensions)
         -> std::expected<void, std::string>
       {
         auto unsupported_extension_it =
@@ -140,7 +140,7 @@ app::check_validation_layer_support(
       [](vk::Result result) -> std::string { return vk::to_string(result); })
     .and_then(
       [ &required_layers ](
-        const std::vector<vk::LayerProperties>& layer_extensions)
+        std::span<const vk::LayerProperties> layer_extensions)
         -> std::expected<void, std::string>
       {
         auto unsupported_layer_it = std::ranges::find_if(required_layers,
