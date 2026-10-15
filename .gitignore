@@ -1,0 +1,14 @@
+/build/
+/build-*/
+/gcm.cache/
+/.cache/
+compile_commands.json
+/shaders/*.spv
+/third-party/tinyobjloader/tiny_obj_loader.h
+/third-party/tinyobjloader/.release_sha
+
+/docs/vulkan-analysis.md
+/docs/library-development-policy.md
+/docs/*
+imgui.ini
+*.bin
