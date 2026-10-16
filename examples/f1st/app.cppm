@@ -518,44 +518,42 @@ public:
       return result;
     };
 
-    auto result =
-      sequence(
-        &session::create_sampler_cache,
-        &session::create_swap_chain,
-        &session::create_command_pool,
-        &session::create_upload_pool,
-        &session::create_transfer_upload_pool,
-        &session::create_stage_pool,
-        &session::create_frames,
-        &session::create_uniform_ring,
-        &session::create_frame_timeline,
-        &session::create_timestamp_ring)
-        .and_then([ & ]() -> step_t {
-          if constexpr (Backend == vkpp::descriptor_table_backend::classic)
-          {
-            return sequence(
-              &session::create_scope_arenas, &session::create_buffers)
-              .transform([ & ] { create_descriptor_sets(); });
-          }
-          else
-          {
-            return sequence(&session::create_buffers);
-          }
-        })
-        .and_then([ & ] {
+    return sequence(
+      &session::create_sampler_cache,
+      &session::create_swap_chain,
+      &session::create_command_pool,
+      &session::create_upload_pool,
+      &session::create_transfer_upload_pool,
+      &session::create_stage_pool,
+      &session::create_frames,
+      &session::create_uniform_ring,
+      &session::create_frame_timeline,
+      &session::create_timestamp_ring)
+      .and_then([ & ]() -> step_t {
+        if constexpr (Backend == vkpp::descriptor_table_backend::classic)
+        {
           return sequence(
-            &session::create_graphics_pipelines,
-            &session::create_imgui_descriptor_pool,
-            &session::init_imgui,
-            &session::create_scene_sampler,
-            &session::create_histogram);
-        });
-    if (!result)
-    {
-      std::println(std::cerr, "error: {}", vkpp::message(result.error()));
-      drain_diagnostics();
-    }
-    return result;
+            &session::create_scope_arenas, &session::create_buffers)
+            .transform([ & ] { create_descriptor_sets(); });
+        }
+        else
+        {
+          return sequence(&session::create_buffers);
+        }
+      })
+      .and_then([ & ] {
+        return sequence(
+          &session::create_graphics_pipelines,
+          &session::create_imgui_descriptor_pool,
+          &session::init_imgui,
+          &session::create_scene_sampler,
+          &session::create_histogram);
+      })
+      .or_else([ this ](const vkpp::error_t& error) -> step_t {
+        std::println(std::cerr, "error: {}", vkpp::message(error));
+        drain_diagnostics();
+        return std::unexpected {error};
+      });
   }
 
   [[nodiscard]]
@@ -1552,12 +1550,12 @@ private:
           vk::DeviceSize arena_size {0UZ};
           for (const auto& pack : packed)
           {
-            arena_size += static_cast<vk::DeviceSize>(pack.vertices.size());
+            arena_size += pack.vertices.size();
             const vk::DeviceSize index_align =
               (pack.index_type == vk::IndexType::eUint32) ? 4UZ : 2UZ;
             arena_size =
               (arena_size + index_align - 1UZ) / index_align * index_align;
-            arena_size += static_cast<vk::DeviceSize>(pack.indices.size());
+            arena_size += pack.indices.size();
           }
 
           return vkpp::make_buffer_arena(
@@ -1581,13 +1579,12 @@ private:
                   const auto&          pack = packed[ index ];
                   const vk::DeviceSize index_align =
                     (pack.index_type == vk::IndexType::eUint32) ? 4UZ : 2UZ;
-                  auto vertex = geometry_arena_.allocate(
-                    static_cast<vk::DeviceSize>(pack.vertices.size()), 0UZ);
+                  auto vertex =
+                    geometry_arena_.allocate(pack.vertices.size(), 0UZ);
                   if (!vertex) { return std::unexpected {vertex.error()}; }
 
-                  auto index_slice = geometry_arena_.allocate(
-                    static_cast<vk::DeviceSize>(pack.indices.size()),
-                    index_align);
+                  auto index_slice =
+                    geometry_arena_.allocate(pack.indices.size(), index_align);
                   if (!index_slice)
                   {
                     return std::unexpected {index_slice.error()};
@@ -1814,8 +1811,12 @@ private:
     auto color_format = static_cast<VkFormat>(swap_chain_.format());
     VkPipelineRenderingCreateInfo pipeline_rendering_info {
       .sType                = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+      .pNext                = nullptr,
+      .viewMask             = {},
       .colorAttachmentCount = 1U,
       .pColorAttachmentFormats = &color_format,
+      .depthAttachmentFormat   = {},
+      .stencilAttachmentFormat = {},
     };
 
     ImGui_ImplVulkan_InitInfo init_info {
@@ -1827,15 +1828,47 @@ private:
       .QueueFamily    = device_.graphics_qf_index(),
       .Queue          = static_cast<VkQueue>(*device_.graphics_queue()),
       .DescriptorPool = static_cast<VkDescriptorPool>(*imgui_descriptor_pool_),
-      .MinImageCount  = image_count,
-      .ImageCount     = image_count,
+      .DescriptorPoolSize = {},
+      .MinImageCount      = image_count,
+      .ImageCount         = image_count,
+      .PipelineCache      = nullptr,
       .PipelineInfoMain =
         {
+          .RenderPass                  = nullptr,
+          .Subpass                     = {},
           .MSAASamples                 = VK_SAMPLE_COUNT_1_BIT,
+          .ExtraDynamicStates          = {},
           .PipelineRenderingCreateInfo = pipeline_rendering_info,
+          .SwapChainImageUsage         = {},
+        },
+      .PipelineInfoForViewports =
+        {
+          .RenderPass                  = nullptr,
+          .Subpass                     = {},
+          .MSAASamples                 = VK_SAMPLE_COUNT_1_BIT,
+          .ExtraDynamicStates          = {},
+          .PipelineRenderingCreateInfo = {},
+          .SwapChainImageUsage         = {},
         },
       .UseDynamicRendering = true,
+      .Allocator           = nullptr,
+      .CheckVkResultFn     = nullptr,
       .MinAllocationSize   = 1'024U * 1'024U,
+      .CustomShaderVertCreateInfo =
+        {
+          .sType    = {},
+          .pNext    = nullptr,
+          .flags    = {},
+          .codeSize = {},
+          .pCode    = nullptr,
+        },
+      .CustomShaderFragCreateInfo = {
+        .sType    = {},
+        .pNext    = nullptr,
+        .flags    = {},
+        .codeSize = {},
+        .pCode    = nullptr,
+      },
     };
 
     if (!ImGui_ImplVulkan_Init(&init_info))
@@ -2161,9 +2194,9 @@ private:
       glm::transpose(glm::inverse(glm::mat3 {world_matrix}));
 
     std::array<float, 12> columns {};
-    for (auto column : std::views::indices(3UZ))
+    for (auto column : std::views::indices(3))
     {
-      for (auto row : std::views::indices(3UZ))
+      for (auto row : std::views::indices(3))
       {
         columns[ column * 4UZ + row ] = normal_matrix[ column ][ row ];
       }
@@ -2810,7 +2843,10 @@ private:
     }
 
     begin_imgui_frame();
-    if (auto result = ensure_scene_targets(); !result) { return result; }
+    if (auto targets_result = ensure_scene_targets(); !targets_result)
+    {
+      return std::unexpected {targets_result.error()};
+    }
     finish_imgui_frame();
     update_uniform_buffer(frame_index_);
 
