@@ -8,9 +8,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(ProjectContracts)
 include(FetchContent)
+if(NOT DEFINED FETCHCONTENT_SOURCE_DIR_VKPP AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../Vulkan-pp/CMakeLists.txt")
+  set(FETCHCONTENT_SOURCE_DIR_VKPP "${CMAKE_CURRENT_SOURCE_DIR}/../Vulkan-pp" CACHE PATH "Local Vulkan-pp checkout (W1 workspace)")
+endif()
 FetchContent_Declare(vkpp
   GIT_REPOSITORY git@github.com:F1STjd/Vulkan-pp.git
-  GIT_TAG        <sha from 72b.6>
+  GIT_TAG        3d2d35cfa233f76835d8c4bdffb4b6040ab56722
   FIND_PACKAGE_ARGS CONFIG)
 FetchContent_MakeAvailable(vkpp)
 
@@ -30,10 +33,3 @@ set(TEXTURE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/textures")
 set(MODEL_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/models")
 
 add_subdirectory(examples/f1st)
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  add_custom_target(copy_compile_commands ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_BINARY_DIR}/compile_commands.json"
-      "${CMAKE_SOURCE_DIR}/compile_commands.json")
-endif()

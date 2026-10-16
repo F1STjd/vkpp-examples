@@ -1,7 +1,6 @@
 /build/
 /.cache/
 compile_commands.json
-CMakeUserPresets.json
 /shaders/*.spv
 /docs/
 imgui.ini
