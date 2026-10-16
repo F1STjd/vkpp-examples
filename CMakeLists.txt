@@ -6,6 +6,7 @@ project(vkpp_examples LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(ProjectContracts)
 include(FetchContent)
 FetchContent_Declare(vkpp
   GIT_REPOSITORY git@github.com:F1STjd/Vulkan-pp.git
@@ -16,7 +17,6 @@ FetchContent_MakeAvailable(vkpp)
 if(NOT COMMAND vkpp_enable_warnings)
   include(ProjectWarnings)
 endif()
-include(ProjectContracts)
 
 find_package(Vulkan REQUIRED)
 find_package(SFML 3 REQUIRED COMPONENTS Window Graphics System)

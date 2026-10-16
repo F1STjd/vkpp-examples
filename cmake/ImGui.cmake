@@ -17,8 +17,9 @@ add_library(imgui STATIC
   "${imgui_upstream_SOURCE_DIR}/imgui_widgets.cpp"
   "${imgui_upstream_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp"
 )
-target_include_directories(imgui PUBLIC "${imgui_upstream_SOURCE_DIR}")
+target_include_directories(imgui SYSTEM PUBLIC "${imgui_upstream_SOURCE_DIR}")
 target_compile_definitions(imgui PUBLIC
   "IMGUI_IMPL_VULKAN_VULKAN_HAS_DYNAMIC_RENDERING"
 )
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
+vkpp_silence_third_party(imgui)

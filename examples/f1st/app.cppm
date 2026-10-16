@@ -518,37 +518,44 @@ public:
       return result;
     };
 
-    return sequence(
-      &session::create_sampler_cache,
-      &session::create_swap_chain,
-      &session::create_command_pool,
-      &session::create_upload_pool,
-      &session::create_transfer_upload_pool,
-      &session::create_stage_pool,
-      &session::create_frames,
-      &session::create_uniform_ring,
-      &session::create_frame_timeline,
-      &session::create_timestamp_ring)
-      .and_then([ & ]() -> step_t {
-        if constexpr (Backend == vkpp::descriptor_table_backend::classic)
-        {
+    auto result =
+      sequence(
+        &session::create_sampler_cache,
+        &session::create_swap_chain,
+        &session::create_command_pool,
+        &session::create_upload_pool,
+        &session::create_transfer_upload_pool,
+        &session::create_stage_pool,
+        &session::create_frames,
+        &session::create_uniform_ring,
+        &session::create_frame_timeline,
+        &session::create_timestamp_ring)
+        .and_then([ & ]() -> step_t {
+          if constexpr (Backend == vkpp::descriptor_table_backend::classic)
+          {
+            return sequence(
+              &session::create_scope_arenas, &session::create_buffers)
+              .transform([ & ] { create_descriptor_sets(); });
+          }
+          else
+          {
+            return sequence(&session::create_buffers);
+          }
+        })
+        .and_then([ & ] {
           return sequence(
-            &session::create_scope_arenas, &session::create_buffers)
-            .transform([ & ] { create_descriptor_sets(); });
-        }
-        else
-        {
-          return sequence(&session::create_buffers);
-        }
-      })
-      .and_then([ & ] {
-        return sequence(
-          &session::create_graphics_pipelines,
-          &session::create_imgui_descriptor_pool,
-          &session::init_imgui,
-          &session::create_scene_sampler,
-          &session::create_histogram);
-      });
+            &session::create_graphics_pipelines,
+            &session::create_imgui_descriptor_pool,
+            &session::init_imgui,
+            &session::create_scene_sampler,
+            &session::create_histogram);
+        });
+    if (!result)
+    {
+      std::println(std::cerr, "error: {}", vkpp::message(result.error()));
+      drain_diagnostics();
+    }
+    return result;
   }
 
   [[nodiscard]]
@@ -1924,7 +1931,8 @@ private:
       >(device_.device(),
         runtime_args,
         shader,
-        pipeline_persistence_.cache_for_create())
+        pipeline_persistence_.cache_for_create(),
+        diagnostic_buffer_)
         .transform(store_pipeline);
     }
     else
@@ -1937,7 +1945,8 @@ private:
         runtime_args,
         shader,
         bindings_.heap_arena,
-        pipeline_persistence_.cache_for_create())
+        pipeline_persistence_.cache_for_create(),
+        diagnostic_buffer_)
         .transform(store_pipeline);
     }
   }

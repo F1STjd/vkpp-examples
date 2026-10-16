@@ -30,10 +30,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_sources(f1st PRIVATE contracts_handler.cpp)
 endif()
 
-if (MINGW)
-  target_link_options(f1st PRIVATE "-Wl,--allow-multiple-definition")
-endif()
-
 file(TO_CMAKE_PATH "${SHADER_OUTPUT_DIRECTORY}" _shader_directory)
 string(REPLACE "\\" "/" _shader_directory "${_shader_directory}")
 file(TO_CMAKE_PATH "${TEXTURE_OUTPUT_DIRECTORY}" _texture_directory)
