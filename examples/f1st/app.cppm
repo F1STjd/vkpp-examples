@@ -436,6 +436,7 @@ struct session_bindings<vkpp::descriptor_table_backend::classic>
   vkpp::classic_bindless_table                  bindless_table {};
   scope_arena<vkpp::resource_scope::persistent> persistent_arena {};
   scope_arena<vkpp::resource_scope::per_frame>  per_frame_arena {};
+  scope_arena<vkpp::resource_scope::per_pass>   per_pass_arena {};
   vk::raii::PipelineLayout graphics_pipeline_layout {nullptr};
 };
 
@@ -1895,7 +1896,7 @@ private:
   auto
   create_scene_sampler() -> std::expected<void, vkpp::error_t>
   {
-    const vk::SamplerCreateInfo create_info {
+    scene_sampler_info_ = vk::SamplerCreateInfo {
       .magFilter    = vk::Filter::eLinear,
       .minFilter    = vk::Filter::eLinear,
       .mipmapMode   = vk::SamplerMipmapMode::eNearest,
@@ -1906,7 +1907,7 @@ private:
       .maxLod       = 0.25F,
     };
     return map_vk_error(
-      device_.device().createSampler(create_info), diagnostic_buffer_)
+      device_.device().createSampler(scene_sampler_info_), diagnostic_buffer_)
       .transform([ this ](vk::raii::Sampler&& sampler) -> void {
         scene_sampler_ = std::move(sampler);
       });
@@ -1932,10 +1933,13 @@ private:
       histogram_readbacks_[ index ] = std::move(*readback);
     }
 
-    auto arena = scope_arena<vkpp::resource_scope::per_pass>::create(
-      device_.device(), bindings_.set_layouts);
-    if (!arena) { return std::unexpected {arena.error()}; }
-    histogram_arena_ = std::move(*arena);
+    if constexpr (Backend == vkpp::descriptor_table_backend::classic)
+    {
+      auto arena = scope_arena<vkpp::resource_scope::per_pass>::create(
+        device_.device(), bindings_.set_layouts);
+      if (!arena) { return std::unexpected {arena.error()}; }
+      bindings_.per_pass_arena = std::move(*arena);
+    }
 
     auto spirv = vkpp::load_shader_file(SHADER_DIRECTORY "slang.spv");
     if (!spirv) { return std::unexpected {spirv.error()}; }
@@ -2018,12 +2022,22 @@ private:
               vkpp::make_app_error(vkpp::app_error_code::invalid_state),
             };
           }
-          vkpp::write_descriptor<histogram_image_tag>(
-            histogram_arena_,
-            device_.device(),
-            *scene_sampler_,
-            *scene_.resolve().view());
-          return {};
+          if constexpr (Backend == vkpp::descriptor_table_backend::classic)
+          {
+            vkpp::write_descriptor<histogram_image_tag>(
+              bindings_.per_pass_arena,
+              device_.device(),
+              *scene_sampler_,
+              *scene_.resolve().view());
+            return {};
+          }
+          else
+          {
+            return bindings_.heap_arena.template write_cis<
+              resource_layout,
+              histogram_image_tag
+            >(device_.device(), scene_sampler_info_, scene_.resolve().view_create_info());
+          }
         });
   }
 
@@ -2243,6 +2257,30 @@ private:
   }
 
   void
+  bind_histogram_pass(
+    vk::raii::CommandBuffer& command_buffer, const histogram_push_cpu& push)
+    requires (Backend == vkpp::descriptor_table_backend::classic)
+  {
+    const std::array sets {bindings_.per_pass_arena.set(0)};
+    vkpp::bind_compute(
+      command_buffer,
+      *histogram_pipeline_.pipeline(),
+      *histogram_pipeline_.layout(),
+      sets,
+      bindings_.per_pass_arena.set_index);
+    vkpp::push_compute<Backend>(command_buffer, histogram_pipeline_, push);
+  }
+
+  void
+  bind_histogram_pass(vk::raii::CommandBuffer& command_buffer, const histogram_push_cpu& push)
+    requires (Backend == vkpp::descriptor_table_backend::heap)
+  {
+    vkpp::bind_compute_descriptors<Backend>(
+      command_buffer, *histogram_pipeline_.pipeline(), bindings_.heap_arena);
+    vkpp::push_compute<Backend>(command_buffer, push);
+  }
+
+  void
   record_draw_item(
     vk::raii::CommandBuffer&       command_buffer,
     std::uint32_t                  draw_index,
@@ -2422,24 +2460,13 @@ private:
         };
         vkpp::record_buffer_use_transitions(
           command_buffer, std::span {&after_fill, 1UZ});
-
-        const std::array histogram_sets {histogram_arena_.set(0)};
-        vkpp::bind_compute(
+        bind_histogram_pass(
           command_buffer,
-          *histogram_pipeline_.pipeline(),
-          *histogram_pipeline_.layout(),
-          histogram_sets,
-          histogram_arena_.set_index);
-
-        vkpp::push_compute_constants(
-          command_buffer,
-          *histogram_pipeline_.layout(),
           histogram_push_cpu {
-            .extent_x  = scene_extent_.width,
-            .extent_y  = scene_extent_.height,
-            .bin_count = histogram_bins,
-            .device_address =
-              static_cast<std::uint64_t>(histogram_device_address_),
+            .extent_x       = scene_extent_.width,
+            .extent_y       = scene_extent_.height,
+            .bin_count      = histogram_bins,
+            .device_address = histogram_device_address_,
           });
         vkpp::dispatch(
           command_buffer,
@@ -2988,6 +3015,7 @@ private:
   bool                                  imgui_layout_built_ {false};
   vkpp::frame_attachments               scene_ {};
   vk::raii::Sampler                     scene_sampler_ {nullptr};
+  vk::SamplerCreateInfo                 scene_sampler_info_ {};
   vk::Extent2D                          scene_extent_ {};
   vk::Extent2D                          scene_desired_extent_ {};
   VkDescriptorSet                       scene_texture_id_ {VK_NULL_HANDLE};
@@ -3080,11 +3108,10 @@ private:
   vkpp::device_address_buffer histogram_bins_ {};
   vk::DeviceAddress           histogram_device_address_ {};
   std::array<vkpp::readback_buffer, max_frames_in_flight>
-                                              histogram_readbacks_ {};
-  scope_arena<vkpp::resource_scope::per_pass> histogram_arena_ {};
-  vkpp::compute_pipeline                      histogram_pipeline_ {};
-  vk::raii::Sampler                           histogram_sampler_ {nullptr};
-  std::array<std::uint32_t, histogram_bins>   histogram_cpu_ {};
+                                            histogram_readbacks_ {};
+  vkpp::compute_pipeline                    histogram_pipeline_ {};
+  vk::raii::Sampler                         histogram_sampler_ {nullptr};
+  std::array<std::uint32_t, histogram_bins> histogram_cpu_ {};
 
   vkpp::texture<> ibl_radiance_ {};
   vkpp::texture<> ibl_brdf_lut_ {};
