@@ -19,20 +19,21 @@ set_target_properties(f1st PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 target_link_libraries(f1st PRIVATE
-  vkpp SFML::Window glm::cppm Vulkan::cppm imgui project_warnings)
+  vkpp::vkpp SFML::Window glm::cppm Vulkan::cppm imgui)
+vkpp_enable_warnings(f1st)
 target_link_libraries(f1st PRIVATE
   $<$<PLATFORM_ID:Windows>:stdc++exp>)
 
 add_dependencies(f1st slang_shaders)
 
-# Contracts: the renderer uses -fcontracts (GNU only), same as the old `lbn`
-# target. contracts_config.hpp / contracts_handler.cpp live beside the app.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_sources(f1st PRIVATE contracts_handler.cpp)
 endif()
 
-# Shader/texture/model directories for constructing asset paths at call sites
-# (SHADER_DIRECTORY was on the old `lbn` target; MODEL/TEXTURE mirror `utils`).
+if (MINGW)
+  target_link_options(f1st PRIVATE "-Wl,--allow-multiple-definition")
+endif()
+
 file(TO_CMAKE_PATH "${SHADER_OUTPUT_DIRECTORY}" _shader_directory)
 string(REPLACE "\\" "/" _shader_directory "${_shader_directory}")
 file(TO_CMAKE_PATH "${TEXTURE_OUTPUT_DIRECTORY}" _texture_directory)
