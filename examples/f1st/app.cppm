@@ -2036,7 +2036,9 @@ private:
             return bindings_.heap_arena.template write_cis<
               resource_layout,
               histogram_image_tag
-            >(device_.device(), scene_sampler_info_, scene_.resolve().view_create_info());
+            >(device_.device(),
+              scene_sampler_info_,
+              scene_.resolve().view_create_info());
           }
         });
   }
@@ -2272,7 +2274,8 @@ private:
   }
 
   void
-  bind_histogram_pass(vk::raii::CommandBuffer& command_buffer, const histogram_push_cpu& push)
+  bind_histogram_pass(
+    vk::raii::CommandBuffer& command_buffer, const histogram_push_cpu& push)
     requires (Backend == vkpp::descriptor_table_backend::heap)
   {
     vkpp::bind_compute_descriptors<Backend>(
@@ -2350,18 +2353,10 @@ private:
         scene_.record_begin_uses(image_uses_, command_buffer);
 
         vk::ClearValue clear_color {
-          vk::ClearColorValue {
-            0.0F,
-            0.0F,
-            0.0F,
-            1.0F,
-          },
+          .color = {.float32 = std::array {0.0F, 0.0F, 0.0F, 1.0F}},
         };
         vk::ClearValue clear_depth {
-          vk::ClearDepthStencilValue {
-            .depth   = 1.0F,
-            .stencil = 0,
-          },
+          .depthStencil = {.depth = 1.0F, .stencil = 0},
         };
         // I do not check if this has value, because in non-headless option it
         // has to work
@@ -2502,12 +2497,9 @@ private:
           vkpp::image_use::color_attachment,
           vk::ImageAspectFlagBits::eColor);
 
-        vk::ClearValue              ui_clear {vk::ClearColorValue {
-          0.10F,
-          0.10F,
-          0.12F,
-          1.0F,
-        }};
+        vk::ClearValue ui_clear {
+          .color = {.float32 = std::array {0.10F, 0.10F, 0.12F, 1.0F}}
+        };
         vk::RenderingAttachmentInfo ui_color {
           .imageView   = swap_chain_.image_view(image_index),
           .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
