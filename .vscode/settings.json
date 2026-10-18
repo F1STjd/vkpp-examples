@@ -1,0 +1,17 @@
+{
+  "clangd.path": "D:/msys2/mingw64/bin/clangd.exe",
+  "clangd.arguments": [
+    "--experimental-modules-support",
+    "--query-driver=D:/msys2/mingw64/bin/*",
+    "--header-insertion=never",
+    "--background-index",
+    "--background-index-priority=background",
+    "--pch-storage=memory",
+    "--clang-tidy=false",
+    "--limit-results=50",
+    "-j=3"
+  ],
+  "files.watcherExclude": {
+    "**/build/**": true
+  }
+}
