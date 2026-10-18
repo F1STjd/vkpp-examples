@@ -1,7 +1,9 @@
 /build/
 /.cache/
 compile_commands.json
-/shaders/*.spv
+*.spv
+*.exe
 /docs/
 imgui.ini
 *.bin
+!models/**/*.bin
