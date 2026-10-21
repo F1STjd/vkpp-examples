@@ -13,8 +13,9 @@ if(NOT DEFINED FETCHCONTENT_SOURCE_DIR_VKPP AND EXISTS "${CMAKE_CURRENT_SOURCE_D
 endif()
 FetchContent_Declare(vkpp
   GIT_REPOSITORY git@github.com:F1STjd/Vulkan-pp.git
-  GIT_TAG        3d2d35cfa233f76835d8c4bdffb4b6040ab56722
+  GIT_TAG        cec26b6dfdcf3b0e0af4945ada1b824aa8b5d443
   FIND_PACKAGE_ARGS CONFIG)
+  set(VKPP_WITH_GPU ON CACHE BOOL "Build vkpp::gpu for the transform example")
 FetchContent_MakeAvailable(vkpp)
 
 if(NOT COMMAND vkpp_enable_warnings)
@@ -33,3 +34,4 @@ set(TEXTURE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/textures")
 set(MODEL_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/models")
 
 add_subdirectory(examples/f1st)
+add_subdirectory(examples/transform)
