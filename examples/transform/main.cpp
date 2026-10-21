@@ -61,7 +61,7 @@ run(
     .device = device,
     .pool   = pool,
     .source = output->buffer(),
-    .size = output->size(),
+    .size   = output->size(),
   });
   if (!readback) { return false; }
 
