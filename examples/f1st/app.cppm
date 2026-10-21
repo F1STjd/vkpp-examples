@@ -786,7 +786,7 @@ private:
     const vkpp::graphics_pipeline_library_runtime_args runtime_args {
       .vertex_bindings    = vertex_bindings,
       .vertex_attributes  = vertex_attributes,
-      .spirv              = *spirv,
+      .words              = *spirv,
       .set_layouts        = set_layouts,
       .push_constant_size = static_cast<std::uint32_t>(sizeof(draw_push)),
       .push_constant_stages =
@@ -954,7 +954,7 @@ private:
     const vkpp::graphics_pipeline_library_runtime_args runtime_args {
       .vertex_bindings    = vertex_bindings,
       .vertex_attributes  = vertex_attributes,
-      .spirv              = *spirv,
+      .words              = *spirv,
       .set_layouts        = {},
       .push_constant_size = 0U,
       .layout             = {},
@@ -1951,7 +1951,7 @@ private:
       .push_constant_size = sizeof(histogram_push_cpu),
     };
     const vkpp::compute_shader shader {
-      .spirv = *spirv,
+      .words = *spirv,
       .entry = "histogram_main",
     };
     const auto store_pipeline =
