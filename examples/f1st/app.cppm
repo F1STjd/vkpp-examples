@@ -64,7 +64,7 @@ namespace f1st
 
 using namespace std::string_view_literals;
 
-export constexpr const char* model_path {MODEL_DIRECTORY "911.glb"};
+export constexpr std::string_view model_path {MODEL_DIRECTORY "911.glb"};
 
 export constexpr std::uint32_t window_width {800};
 export constexpr std::uint32_t window_height {600};
