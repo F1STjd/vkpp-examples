@@ -39,5 +39,6 @@ string(REPLACE "\\" "/" _model_directory "${_model_directory}")
 target_compile_definitions(f1st PRIVATE
   SHADER_DIRECTORY="${_shader_directory}/"
   TEXTURE_DIRECTORY="${_texture_directory}/"
-  MODEL_DIRECTORY="${_model_directory}/")
+  MODEL_DIRECTORY="${_model_directory}/"
+  F1ST_CACHE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/cache/")
 

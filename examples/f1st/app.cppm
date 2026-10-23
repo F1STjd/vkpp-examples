@@ -163,8 +163,9 @@ struct histogram_push_cpu
 static_assert(sizeof(histogram_push_cpu) == 24UZ);
 static_assert(offsetof(histogram_push_cpu, device_address) == 16UZ);
 
-constexpr auto pipeline_cache_path        = "pipeline_cache.bin"sv;
-constexpr auto pipeline_binary_store_path = "pipeline_binaries.bin"sv;
+constexpr auto pipeline_cache_path = F1ST_CACHE_DIR "pipeline_cache.bin"sv;
+constexpr auto pipeline_binary_store_path =
+  F1ST_CACHE_DIR "pipeline_binaries.bin"sv;
 
 constexpr vk::DeviceSize stage_pool_capacity = 64ULL * 1'024ULL * 1'024ULL;
 
