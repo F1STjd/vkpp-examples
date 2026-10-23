@@ -13,7 +13,7 @@ if(NOT DEFINED FETCHCONTENT_SOURCE_DIR_VKPP AND EXISTS "${CMAKE_CURRENT_SOURCE_D
 endif()
 FetchContent_Declare(vkpp
   GIT_REPOSITORY git@github.com:F1STjd/Vulkan-pp.git
-  GIT_TAG        cec26b6dfdcf3b0e0af4945ada1b824aa8b5d443
+  GIT_TAG        fb44addb9d321770b5ea84900b40b740319fa61e
   FIND_PACKAGE_ARGS CONFIG)
   set(VKPP_WITH_GPU ON CACHE BOOL "Build vkpp::gpu for the transform example")
 FetchContent_MakeAvailable(vkpp)
