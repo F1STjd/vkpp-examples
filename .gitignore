@@ -7,3 +7,4 @@ compile_commands.json
 imgui.ini
 *.bin
 !models/**/*.bin
+/examples/*/cache/
