@@ -20,7 +20,9 @@ constexpr auto shift = [](auto& value, auto offset) { value += offset; };
 template<class Element>
 auto
 input_value(std::uint32_t index) -> Element
-{ return static_cast<Element>(index % 1'000U - 500); }
+{
+  return static_cast<Element>(static_cast<std::int32_t>(index % 1'000U) - 500);
+}
 
 template<class Element>
 auto
