@@ -109,7 +109,17 @@ check(
         return input_value<Element>(index) * static_cast<Element>(2) * factor +
                offset;
       },
-      std::format("{} * 2 * {} + {}", name, factor, offset));
+      std::format("{} * 2 * {} + {}", name, factor, offset)) &&
+    vkpp::gpu::run(
+      context,
+      *input | fiat::transform(twice) | fiat::transform(plus_one),
+      *input)
+      .has_value() &&
+    verify(
+      context,
+      std::move(input),
+      expected_value<Element>,
+      std::format("{} in place", name));
 }
 
 auto
