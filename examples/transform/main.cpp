@@ -15,6 +15,7 @@ constexpr auto scale = [](auto& value, auto factor) { return value * factor; };
 constexpr auto scale_and_add = [](auto& value, auto factor, auto offset) {
   return value * factor + offset;
 };
+constexpr auto shift = [](auto& value, auto offset) { value += offset; };
 
 template<class Element>
 auto
@@ -96,7 +97,19 @@ check(
       [ factor, offset ](std::uint32_t index) -> Element {
         return input_value<Element>(index) * factor + offset;
       },
-      std::format("{} * {} + {}", name, factor, offset));
+      std::format("{} * {} + {}", name, factor, offset)) &&
+    verify(
+      context,
+      *input |
+        fiat::transform(twice) |
+        fiat::transform(scale, factor) |
+        fiat::transform(shift, offset) |
+        vkpp::gpu::execute(context),
+      [ factor, offset ](std::uint32_t index) -> Element {
+        return input_value<Element>(index) * static_cast<Element>(2) * factor +
+               offset;
+      },
+      std::format("{} * 2 * {} + {}", name, factor, offset));
 }
 
 auto
@@ -151,5 +164,5 @@ main() -> int
       "diagnostic: {}",
       std::string_view {record.text.data(), record.text_size});
   }
-  return exact && kernels == 9UZ && diagnostics.size() == 0UZ ? 0 : 1;
+  return exact && kernels == 12UZ && diagnostics.size() == 0UZ ? 0 : 1;
 }
