@@ -2210,15 +2210,7 @@ private:
     const glm::mat3 normal_matrix =
       glm::transpose(glm::inverse(glm::mat3 {world_matrix}));
 
-    std::array<float, 12> columns {};
-    for (auto column : std::views::indices(3))
-    {
-      for (auto row : std::views::indices(3))
-      {
-        columns[ column * 4UZ + row ] = normal_matrix[ column ][ row ];
-      }
-    }
-    return columns;
+    return std::bit_cast<std::array<float, 12>>(glm::mat3x4 {normal_matrix});
   }
 
   void
