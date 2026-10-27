@@ -1218,34 +1218,27 @@ private:
   bindable(const vkpp::device_address_buffer& buffer)
   { return buffer.template addressed_view<T>(device_); }
 
+  [[nodiscard]]
   auto
-  write_ibl_radiance_cis(
-    vk::Sampler                                       sampler,
-    [[maybe_unused]] const vkpp::sampler_create_info& sampler_info)
-    -> std::expected<void, vkpp::error_t>
-    requires (Backend == vkpp::descriptor_table_backend::classic)
+  descriptor_writes() -> vkpp::descriptor_write_context
   {
-    vkpp::write_descriptor<ibl_tag>(
-      bindings_.persistent_arena,
-      device_.device(),
-      sampler,
-      *ibl_radiance_.view());
-    return {};
+    return {
+      .device   = device_.device(),
+      .physical = device_.physical_device(),
+      .samplers = *sampler_cache_,
+    };
   }
 
+  [[nodiscard]]
   auto
-  write_ibl_radiance_cis(
-    [[maybe_unused]] vk::Sampler     sampler,
-    const vkpp::sampler_create_info& sampler_info)
-    -> std::expected<void, vkpp::error_t>
-    requires (Backend == vkpp::descriptor_table_backend::heap)
+  ibl_arena() -> auto&
   {
-    return vkpp::write_cis<resource_layout, ibl_tag>(
-      bindings_.heap_arena,
-      device_.device(),
-      device_.physical_device(),
-      sampler_info,
-      ibl_radiance_);
+    if constexpr (Backend == vkpp::descriptor_table_backend::classic)
+    { return bindings_.persistent_arena; }
+    else
+    {
+      return bindings_.heap_arena;
+    }
   }
 
   auto
@@ -1350,7 +1343,6 @@ private:
           gltf_textures_ = asset.textures;
           host_images_   = asset.host_images;
           texture_role_slots_.assign(gltf_textures_.size(), {});
-          texture_bindless_samplers_.assign(gltf_textures_.size(), {});
           texture_sampler_infos_.assign(gltf_textures_.size(), {});
           for (auto host_index : std::views::indices(asset.host_images.size()))
           {
@@ -1379,11 +1371,8 @@ private:
               {
                 return std::unexpected {sampler_create_info.error()};
               }
-              auto sampler =
-                sampler_cache_->get_or_create(*sampler_create_info);
-              if (!sampler) { return std::unexpected {sampler.error()}; }
               const auto slot = register_bindless_cis(
-                *sampler, *sampler_create_info, textures_[ host_index ]);
+                *sampler_create_info, textures_[ host_index ]);
               if (!slot) { return std::unexpected {slot.error()}; }
               if (host.color_space == vkpp::image_color_space::srgb)
               {
@@ -1393,7 +1382,6 @@ private:
               {
                 texture_role_slots_[ texture_index ].linear = *slot;
               }
-              texture_bindless_samplers_[ texture_index ] = *sampler;
               texture_sampler_infos_[ texture_index ] = *sampler_create_info;
             }
           }
@@ -1401,14 +1389,7 @@ private:
           std::vector<std::byte> radiance_bytes {};
           fill_radiance_cube_rgba8(radiance_bytes);
 
-          auto ibl_sampler = sampler_cache_->get_or_create({
-            .mag_filter     = vk::Filter::eLinear,
-            .min_filter     = vk::Filter::eLinear,
-            .mipmap_mode    = vk::SamplerMipmapMode::eLinear,
-            .address_mode_u = vk::SamplerAddressMode::eClampToEdge,
-            .address_mode_v = vk::SamplerAddressMode::eClampToEdge,
-            .address_mode_w = vk::SamplerAddressMode::eClampToEdge,
-          });
+          auto ibl_sampler = sampler_cache_->get_or_create(ibl_sampler_spec_);
           if (!ibl_sampler) { return std::unexpected {ibl_sampler.error()}; }
 
           auto radiance = vkpp::make_texture({
@@ -1426,24 +1407,14 @@ private:
           });
           if (!radiance) { return std::unexpected {radiance.error()}; }
           ibl_radiance_ = std::move(*radiance);
-          {
-            const vkpp::sampler_create_info ibl_sampler_info {
-              .mag_filter     = vk::Filter::eLinear,
-              .min_filter     = vk::Filter::eLinear,
-              .mipmap_mode    = vk::SamplerMipmapMode::eLinear,
-              .address_mode_u = vk::SamplerAddressMode::eClampToEdge,
-              .address_mode_v = vk::SamplerAddressMode::eClampToEdge,
-              .address_mode_w = vk::SamplerAddressMode::eClampToEdge,
-            };
 
             if (
               auto written =
-                write_ibl_radiance_cis(*ibl_sampler, ibl_sampler_info);
+                vkpp::write_descriptor<ibl_tag, resource_layout>(ibl_arena(), descriptor_writes(), ibl_sampler_spec_, ibl_radiance_);
               !written)
             {
               return std::unexpected {written.error()};
             }
-          }
 
           std::vector<std::byte> brdf_bytes {};
           generate_brdf_lut_rgba16f(brdf_bytes);
@@ -1462,16 +1433,8 @@ private:
           });
           if (!brdf_lut) { return std::unexpected {brdf_lut.error()}; }
 
-          const vkpp::sampler_create_info brdf_sampler_info {
-            .mag_filter     = vk::Filter::eLinear,
-            .min_filter     = vk::Filter::eLinear,
-            .mipmap_mode    = vk::SamplerMipmapMode::eLinear,
-            .address_mode_u = vk::SamplerAddressMode::eClampToEdge,
-            .address_mode_v = vk::SamplerAddressMode::eClampToEdge,
-            .address_mode_w = vk::SamplerAddressMode::eClampToEdge,
-          };
           auto brdf_slot =
-            register_bindless_cis(*ibl_sampler, brdf_sampler_info, *brdf_lut);
+            register_bindless_cis(ibl_sampler_spec_, *brdf_lut);
           if (!brdf_slot) { return std::unexpected {brdf_slot.error()}; }
           ibl_brdf_lut_index_ = *brdf_slot;
           ibl_brdf_lut_       = std::move(*brdf_lut);
@@ -1624,28 +1587,13 @@ private:
 
   auto
   register_bindless_cis(
-    vk::Sampler                      sampler,
     const vkpp::sampler_create_info& sampler_info,
     const vkpp::texture<>& image) -> std::expected<std::uint32_t, vkpp::error_t>
   {
-    if constexpr (Backend == vkpp::descriptor_table_backend::classic)
-    {
-      return vkpp::register_combined_image_sampler<
-        resource_layout,
-        bindless_textures_tag
-      >(bindings_.bindless_table, device_.device(), sampler, image);
-    }
-    else
-    {
-      return vkpp::register_combined_image_sampler<
-        resource_layout,
-        bindless_textures_tag
-      >(bindings_.bindless_table,
-        device_.device(),
-        device_.physical_device(),
-        sampler_info,
-        image);
-    }
+    return vkpp::register_combined_image_sampler<
+      resource_layout,
+      bindless_textures_tag
+    >(bindings_.bindless_table, descriptor_writes(), sampler_info, image);
   }
 
   auto
@@ -2660,7 +2608,6 @@ private:
           !role.linear.has_value();
         if (!need_srgb && !need_linear) { continue; }
         const auto slot = register_bindless_cis(
-          texture_bindless_samplers_[ texture_index ],
           texture_sampler_infos_[ texture_index ],
           textures_[ host_index ]);
         if (!slot)
@@ -2725,7 +2672,6 @@ private:
           !role.linear.has_value();
         if (!need_srgb && !need_linear) { continue; }
         const auto slot = register_bindless_cis(
-          texture_bindless_samplers_[ texture_index ],
           texture_sampler_infos_[ texture_index ],
           textures_[ host_index ]);
         if (!slot)
@@ -3060,12 +3006,19 @@ private:
   std::vector<vkpp::gltf::material_cpu>       materials_cpu_ {};
   std::vector<vkpp::gltf::texture_ref_cpu>    gltf_textures_ {};
   std::vector<vkpp::gltf::texture_role_slots> texture_role_slots_ {};
-  std::vector<vk::Sampler>                    texture_bindless_samplers_ {};
   std::vector<vkpp::sampler_create_info>      texture_sampler_infos_ {};
   std::uint32_t                               default_material_index_ {};
   static constexpr vkpp::gltf::material_transport_spec material_transport_spec_ {
     .transmission = true,
     .clearcoat    = true,
+  };
+  static constexpr vkpp::sampler_create_info ibl_sampler_spec_ {
+    .mag_filter = vk::Filter::eLinear,
+    .min_filter = vk::Filter::eLinear,
+    .mipmap_mode = vk::SamplerMipmapMode::eLinear,
+    .address_mode_u = vk::SamplerAddressMode::eClampToEdge,
+    .address_mode_v = vk::SamplerAddressMode::eClampToEdge,
+    .address_mode_w = vk::SamplerAddressMode::eClampToEdge,
   };
   bool                         rebuild_bindless_requested_ {false};
   bool                         rebuild_bindless_pending_ {false};
