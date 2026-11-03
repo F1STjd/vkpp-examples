@@ -7,9 +7,6 @@ import fiat;
 namespace
 {
 
-constexpr auto plus   = [](auto left, auto right) { return left + right; };
-constexpr auto square = [](auto& value) { return value * value; };
-
 template<class Element>
 auto
 iota_values(std::uint32_t count) -> std::vector<Element>
@@ -34,13 +31,14 @@ run_checks(vkpp::gpu::context& context) -> bool
     context.upload<std::int32_t>(iota_values<std::int32_t>(square_count));
   if (!uints || !floats || !ints) { return false; }
 
-  auto uint_sum = *uints | fiat::reduce(plus, 0U) | vkpp::gpu::execute(context);
+  auto uint_sum =
+    *uints | fiat::reduce(fiat::plus {}, 0U) | vkpp::gpu::execute(context);
   auto float_sum =
-    *floats | fiat::reduce(plus, 0.0F) | vkpp::gpu::execute(context);
+    *floats | fiat::reduce(fiat::plus {}, 0.0F) | vkpp::gpu::execute(context);
   auto square_sum =
     *ints |
-    fiat::transform(square) |
-    fiat::reduce(plus, 0) |
+    fiat::transform(fiat::square {}) |
+    fiat::reduce(fiat::plus {}, 0) |
     vkpp::gpu::execute(context);
 
   if (!uint_sum || !float_sum || !square_sum) { return false; }

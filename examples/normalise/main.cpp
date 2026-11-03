@@ -7,9 +7,6 @@ import fiat;
 namespace
 {
 
-constexpr auto plus      = [](auto left, auto right) { return left + right; };
-constexpr auto divide_by = [](auto value, auto total) { return value / total; };
-
 constexpr std::uint32_t count {1'024U};
 constexpr float         expected_sum {524'800.0F};
 
@@ -26,12 +23,13 @@ run_checks(vkpp::gpu::context& context) -> bool
   auto values = context.upload<float>(inputs);
   if (!values) { return false; }
 
-  auto total = *values | fiat::reduce(plus, 0.0F) | vkpp::gpu::keep(context);
+  auto total =
+    *values | fiat::reduce(fiat::plus {}, 0.0F) | vkpp::gpu::keep(context);
   if (!total) { return false; }
 
   auto normalised =
     *values |
-    fiat::transform_with(*total, divide_by) |
+    fiat::transform_with(*total, fiat::divides{}) |
     vkpp::gpu::execute(context);
   if (!normalised) { return false; }
 
