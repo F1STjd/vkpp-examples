@@ -27,8 +27,7 @@ check_selection_impl(
 {
   const auto     stage = fiat::transform(operation, limit);
   constexpr auto words = fiat::compile<Element>(decltype(stage) {});
-  if (!fiat::write_spirv(
-        output_directory / std::format("n5a_{}.spv", label), words))
+  if (!fiat::write_spirv(output_directory / std::format("{}.spv", label), words))
   {
     return false;
   }
