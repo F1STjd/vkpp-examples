@@ -253,6 +253,163 @@ run_checks(
   return kernels == 10UZ;
 }
 
+template<fiat::scalar Element>
+auto
+host_inclusive(const std::vector<Element>& inputs) -> std::vector<Element>
+{
+  std::vector<Element> sums(inputs.size());
+  std::inclusive_scan(inputs.begin(), inputs.end(), sums.begin());
+  return sums;
+}
+
+template<fiat::scalar Element>
+auto
+host_exclusive(const std::vector<Element>& inputs, Element identity)
+  -> std::vector<Element>
+{
+  std::vector<Element> sums(inputs.size());
+  std::exclusive_scan(inputs.begin(), inputs.end(), sums.begin(), identity);
+  return sums;
+}
+
+auto
+iota_uint(std::uint32_t count) -> std::vector<std::uint32_t>
+{ return std::views::iota(1U, count + 1U) | std::ranges::to<std::vector>(); }
+
+auto
+check_uint_scan(
+  vkpp::gpu::context& context,
+  std::uint32_t       count,
+  bool                exclusive,
+  std::string_view    label) -> bool
+{
+  const auto inputs = iota_uint(count);
+  if (exclusive)
+  {
+    return check_scan_impl(
+      context,
+      inputs,
+      fiat::exclusive_scan(fiat::plus {}, 0U),
+      host_exclusive(inputs, 0U),
+      label);
+  }
+  return check_scan_impl(
+    context,
+    inputs,
+    fiat::inclusive_scan(fiat::plus {}, 0U),
+    host_inclusive(inputs),
+    label);
+}
+
+auto
+check_uint_reduce(
+  vkpp::gpu::context& context, std::uint32_t count, std::string_view label)
+  -> bool
+{
+  const auto          inputs   = iota_uint(count);
+  const std::uint32_t expected = count == 0U ? 0U : (count * (count + 1U)) / 2U;
+  auto                values   = context.upload<std::uint32_t>(inputs);
+  if (!values) { return false; }
+  auto sum =
+    *values | fiat::reduce(fiat::plus {}, 0U) | vkpp::gpu::execute(context);
+  if (!sum) { return false; }
+  const bool exact = *sum == expected;
+  std::println(
+    "{}: {} (sum {})", label, exact ? "exact" : "MISMATCH", expected);
+  return exact;
+}
+
+auto
+run_sync_acceptance_impl(
+  vkpp::gpu::context& context, vkpp::diagnostic_buffer& diagnostics) -> bool
+{
+  const auto inputs = iota_uint(1'000U);
+  auto       values = context.upload<std::uint32_t>(inputs);
+  if (!values) { return false; }
+  auto first =
+    *values | fiat::reduce(fiat::plus {}, 0U) | vkpp::gpu::execute(context);
+  auto second =
+    *values | fiat::reduce(fiat::plus {}, 0U) | vkpp::gpu::execute(context);
+  if (!first || !second || *first != 500'500U || *second != 500'500U)
+  {
+    std::println("sync_reuse_reduce: MISMATCH");
+    return false;
+  }
+  std::println("sync_reuse_reduce: exact");
+  if (!check_uint_scan(context, 1'000U, false, "sync_reuse_inclusive"))
+  {
+    return false;
+  }
+  if (!check_uint_scan(context, 1'000U, true, "sync_reuse_exclusive"))
+  {
+    return false;
+  }
+
+  auto in_place = context.upload<std::uint32_t>(inputs);
+  if (!in_place) { return false; }
+  if (!vkpp::gpu::run(
+        context, *in_place | fiat::exclusive_scan(fiat::plus {}, 0U), *in_place))
+  {
+    return false;
+  }
+  auto in_place_host = context.download(*in_place);
+  if (!in_place_host) { return false; }
+  if (!report_impl(
+        "sync_exclusive_inplace", *in_place_host, host_exclusive(inputs, 0U)))
+  {
+    return false;
+  }
+
+  auto source      = context.upload<std::uint32_t>(inputs);
+  auto destination = context.allocate<std::uint32_t>(1'000U);
+  if (!source || !destination) { return false; }
+  if (
+    !vkpp::gpu::run(
+      context, *source | fiat::exclusive_scan(fiat::plus {}, 0U), *destination))
+  {
+    return false;
+  }
+  auto destination_host = context.download(*destination);
+  if (!destination_host) { return false; }
+  if (!report_impl(
+        "sync_exclusive_run", *destination_host, host_exclusive(inputs, 0U)))
+  {
+    return false;
+  }
+
+  const std::array<std::uint32_t, 4> requests {1U, 32U, 256U, 1'024U};
+  for (const std::uint32_t request : requests)
+  {
+    auto sized = vkpp::gpu::context::create({
+      .name              = "scan-sync",
+      .enable_validation = true,
+      .diagnostics       = diagnostics,
+      .group_size        = request,
+    });
+    if (!sized)
+    {
+      std::println("sync_g{}: CREATE_FAILED", request);
+      return false;
+    }
+    const std::uint32_t actual = sized->group_size();
+    if (request != 1'024U && actual != request)
+    {
+      std::println("sync_g{}_actual_{}: CLAMP", request, actual);
+      return false;
+    }
+    const auto prefix = std::format("sync_g{}_actual_{}", request, actual);
+    if (
+      !check_uint_scan(*sized, actual, false, prefix + "_one_group") ||
+      !check_uint_scan(*sized, actual + 1U, false, prefix + "_tail") ||
+      !check_uint_scan(*sized, actual * 3U, true, prefix + "_three_groups") ||
+      !check_uint_reduce(*sized, actual * 2U, prefix + "_reduce"))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 auto
@@ -275,7 +432,9 @@ main(int argument_count, char** arguments) -> int
       .diagnostics       = diagnostics,
     });
     if (!context) { return 1; }
-    ok = run_checks(*context, output_directory);
+    ok =
+      run_checks(*context, output_directory) &&
+      detail::run_sync_acceptance_impl(*context, diagnostics);
   }
 
   for (
