@@ -90,6 +90,9 @@ write_kernels_impl(const std::filesystem::path& output_directory) -> bool
   using inclusive_float = decltype(fiat::inclusive_scan(fiat::plus {}, 0.0F));
   using exclusive_float = decltype(fiat::exclusive_scan(fiat::plus {}, 0.0F));
   using inclusive_uint  = decltype(fiat::inclusive_scan(fiat::plus {}, 0U));
+  using inclusive_int   = decltype(fiat::inclusive_scan(fiat::plus {}, 0));
+  using exclusive_int   = decltype(fiat::exclusive_scan(fiat::plus {}, 0));
+  using exclusive_uint  = decltype(fiat::exclusive_scan(fiat::plus {}, 0U));
   using maximum_int     = decltype(fiat::inclusive_scan(
     fiat::maximum {}, std::numeric_limits<std::int32_t>::min()));
   using fused_float     = fiat::scan_stage<
@@ -101,6 +104,12 @@ write_kernels_impl(const std::filesystem::path& output_directory) -> bool
   >;
   return write_kernel_impl<float, inclusive_float>(
            output_directory, "inclusive_float") &&
+         write_kernel_impl<std::int32_t, inclusive_int>(
+           output_directory, "inclusive_int") &&
+         write_kernel_impl<std::int32_t, exclusive_int>(
+           output_directory, "exclusive_int") &&
+         write_kernel_impl<std::uint32_t, exclusive_uint>(
+           output_directory, "exclusive_uint") &&
          write_kernel_impl<float, exclusive_float>(
            output_directory, "exclusive_float") &&
          write_kernel_impl<std::uint32_t, inclusive_uint>(
