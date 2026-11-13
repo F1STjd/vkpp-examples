@@ -11,12 +11,9 @@ constexpr std::uint32_t count {16U};
 constexpr float         expected_sum {136.0F};
 constexpr float         expected_square {18'496.0F};
 
-namespace detail
-{
-
 template<fiat::scalar Element, class Operation, std::size_t Size>
 auto
-check_selection_impl(
+check_selection(
   vkpp::gpu::context&              context,
   Operation                        operation,
   const std::array<Element, Size>& inputs,
@@ -49,7 +46,7 @@ check_selection_impl(
 }
 
 auto
-check_selections_impl(
+check_selections(
   vkpp::gpu::context& context, const std::filesystem::path& output_directory)
   -> bool
 {
@@ -95,7 +92,7 @@ check_selections_impl(
     0xFF'FF'FF'FFU,
   };
 
-  return check_selection_impl(
+  return check_selection(
            context,
            fiat::minimum {},
            float_inputs,
@@ -103,7 +100,7 @@ check_selections_impl(
            float_minimum,
            "min_float",
            output_directory) &&
-         check_selection_impl(
+         check_selection(
            context,
            fiat::maximum {},
            float_inputs,
@@ -111,7 +108,7 @@ check_selections_impl(
            float_maximum,
            "max_float",
            output_directory) &&
-         check_selection_impl(
+         check_selection(
            context,
            fiat::minimum {},
            signed_inputs,
@@ -119,7 +116,7 @@ check_selections_impl(
            signed_minimum,
            "min_int",
            output_directory) &&
-         check_selection_impl(
+         check_selection(
            context,
            fiat::maximum {},
            signed_inputs,
@@ -127,7 +124,7 @@ check_selections_impl(
            signed_maximum,
            "max_int",
            output_directory) &&
-         check_selection_impl(
+         check_selection(
            context,
            fiat::minimum {},
            unsigned_inputs,
@@ -135,7 +132,7 @@ check_selections_impl(
            unsigned_minimum,
            "min_uint",
            output_directory) &&
-         check_selection_impl(
+         check_selection(
            context,
            fiat::maximum {},
            unsigned_inputs,
@@ -145,7 +142,7 @@ check_selections_impl(
            output_directory);
 }
 
-} // namespace detail
+} // namespace
 
 auto
 run_checks(
@@ -221,10 +218,8 @@ run_checks(
          host->front() == -expected_sum &&
          *chained_total == 695.0F &&
          *extended_total == 842.0F &&
-         detail::check_selections_impl(context, output_directory);
+         check_selections(context, output_directory);
 }
-
-} // namespace
 
 auto
 main(int argument_count, char** arguments) -> int
