@@ -1,4 +1,5 @@
 import std;
+import vulkan;
 
 import vkpp.diagnostics;
 import vkpp.gpu;
@@ -142,6 +143,21 @@ check_all(
          check<std::uint32_t>(context, "uint", factor, offset);
 }
 
+auto
+capabilities_hold(const auto& capabilities) -> bool
+{
+  constexpr auto basic_and_rotate =
+    vk::SubgroupFeatureFlagBits::eBasic | vk::SubgroupFeatureFlagBits::eRotate;
+  return std::has_single_bit(capabilities.subgroup_size) &&
+         std::has_single_bit(capabilities.minimum_subgroup_size) &&
+         std::has_single_bit(capabilities.maximum_subgroup_size) &&
+         capabilities.minimum_subgroup_size <= capabilities.subgroup_size &&
+         capabilities.subgroup_size <= capabilities.maximum_subgroup_size &&
+         (capabilities.subgroup_operations & basic_and_rotate) ==
+           basic_and_rotate &&
+         capabilities.maximum_push_constants_size >= fiat::push_budget;
+}
+
 } // namespace
 
 auto
@@ -154,6 +170,7 @@ main() -> int
   };
 
   bool        exact {false};
+  bool        capable {false};
   std::size_t kernels {};
   {
     auto context = vkpp::gpu::context::create({
@@ -162,6 +179,23 @@ main() -> int
       .diagnostics       = diagnostics,
     });
     if (!context) { return 1; }
+
+    const auto& capabilities = context->capabilities();
+    std::println(
+      "capabilities: subgroup {} in [{}, {}], operations {:#x}, "
+      "full subgroups {}, partitioned {}, maximal reconvergence {}, "
+      "cooperative matrices {}, shared memory {}, push constants {}",
+      capabilities.subgroup_size,
+      capabilities.minimum_subgroup_size,
+      capabilities.maximum_subgroup_size,
+      static_cast<std::uint32_t>(capabilities.subgroup_operations),
+      capabilities.compute_full_subgroups,
+      capabilities.subgroup_partitioned,
+      capabilities.maximal_reconvergence,
+      capabilities.cooperative_matrix_properties.size(),
+      capabilities.maximum_shared_memory_size,
+      capabilities.maximum_push_constants_size);
+    capable = capabilities_hold(capabilities);
 
     exact   = check_all(*context, 3U, 7U) && check_all(*context, 5U, 11U);
     kernels = context->kernel_count();
@@ -176,5 +210,5 @@ main() -> int
       "diagnostic: {}",
       std::string_view {record.text.data(), record.text_size});
   }
-  return exact && kernels == 12UZ && diagnostics.size() == 0UZ ? 0 : 1;
+  return exact && capable && kernels == 12UZ && diagnostics.size() == 0UZ ? 0 : 1;
 }
