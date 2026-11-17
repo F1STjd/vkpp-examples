@@ -2,6 +2,7 @@ import std;
 import vulkan;
 
 import vkpp.diagnostics;
+import vkpp.error;
 import vkpp.gpu;
 import fiat;
 
@@ -171,6 +172,7 @@ main() -> int
 
   bool        exact {false};
   bool        capable {false};
+  bool        limited {false};
   std::size_t kernels {};
   {
     auto context = vkpp::gpu::context::create({
@@ -197,6 +199,16 @@ main() -> int
       capabilities.maximum_push_constants_size);
     capable = capabilities_hold(capabilities);
 
+    const auto maximum      = context->maximum_element_count<float>();
+    const auto over_maximum = context->allocate<float>(maximum + 1U);
+    limited =
+      !over_maximum &&
+      over_maximum.error().domain == vkpp::error_domain::application &&
+      over_maximum.error().code ==
+        std::to_underlying(vkpp::app_error_code::invalid_count);
+    std::println(
+      "maximum elements: {}, one more rejected: {}", maximum, limited);
+
     exact   = check_all(*context, 3U, 7U) && check_all(*context, 5U, 11U);
     kernels = context->kernel_count();
   }
@@ -210,5 +222,7 @@ main() -> int
       "diagnostic: {}",
       std::string_view {record.text.data(), record.text_size});
   }
-  return exact && capable && kernels == 12UZ && diagnostics.size() == 0UZ ? 0 : 1;
+  return exact && capable && limited && kernels == 12UZ && diagnostics.size() == 0UZ
+           ? 0
+           : 1;
 }
