@@ -1,6 +1,7 @@
 import std;
 
 import vkpp.diagnostics;
+import vkpp.error;
 import vkpp.gpu;
 import fiat;
 
@@ -51,9 +52,45 @@ run_checks(vkpp::gpu::context& context) -> bool
   std::println("float sum 0.5 * 4096: {}", *float_sum);
   std::println("int squares 1..1000: {}", *square_sum);
 
+  const auto computation = *uints | fiat::reduce(fiat::plus {}, 0U);
+  const auto sizes = vkpp::gpu::workspace_requirements(context, computation);
+  std::println(
+    "workspace: table {}, ping_pong {}, scratch {}",
+    sizes.table_bytes,
+    sizes.ping_pong_bytes,
+    sizes.scratch_bytes);
+  auto workspace  = context.allocate_workspace(sizes);
+  auto undersized = context.allocate_workspace({.scratch_bytes = 8UZ});
+  if (!workspace || !undersized) { return false; }
+  const auto first   = vkpp::gpu::run(context, computation, *workspace);
+  const auto second  = vkpp::gpu::run(context, computation, *workspace);
+  const auto guarded = vkpp::gpu::run(context, computation, *undersized);
+  const bool rejected =
+    !guarded &&
+    guarded.error().domain == vkpp::error_domain::application &&
+    guarded.error().code ==
+      std::to_underlying(vkpp::app_error_code::invalid_data_size);
+  std::println(
+    "explicit workspace: {} {}, undersized rejected: {}",
+    first.value_or(0U),
+    second.value_or(0U),
+    rejected);
+
+  constexpr std::uint32_t large_count {(1U << 24U) + 1U};
+  auto                    ones = context.upload<std::uint32_t>(
+    std::views::repeat(1U, large_count) | std::ranges::to<std::vector>());
+  if (!ones) { return false; }
+  const auto large_sum =
+    *ones | fiat::reduce(fiat::plus {}, 0U) | vkpp::gpu::execute(context);
+  std::println("uint ones 2^24 + 1: {}", large_sum.value_or(0U));
+
   return *uint_sum == expected_uint &&
          *float_sum == expected_float &&
-         *square_sum == expected_squares;
+         *square_sum == expected_squares &&
+         first == expected_uint &&
+         second == expected_uint &&
+         rejected &&
+         large_sum == large_count;
 }
 
 } // namespace
