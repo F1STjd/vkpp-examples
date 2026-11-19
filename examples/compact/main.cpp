@@ -34,6 +34,7 @@ run_checks(vkpp::gpu::context& context) -> bool
   const std::vector<float>         expected_floats {1.0F, 2.0F, 3.0F, 5.0F};
   const std::vector<std::int32_t>  ints {-2, -1, 0, 1, 2, 3, -4, 5};
   const std::vector<std::int32_t>  expected_ints {1, 2, 3, 5};
+  const std::vector<std::int32_t>  expected_magnitudes {-2, 2, 3, -4, 5};
   const std::vector<std::uint32_t> uints {0U, 1U, 0U, 2U, 3U, 0U};
   const std::vector<std::uint32_t> expected_uints {1U, 2U, 3U};
   auto                             many =
@@ -68,13 +69,25 @@ run_checks(vkpp::gpu::context& context) -> bool
     *gpu_many |
     vkpp::gpu::select(fiat::greater {}, 0.0F) |
     vkpp::gpu::execute(context);
-  if (!float_out || !int_out || !uint_out || !many_out) { return false; }
+  auto magnitude_out =
+    *gpu_ints |
+    vkpp::gpu::select(
+      [](const fiat::value<std::int32_t>& element) -> fiat::value<bool> {
+        return fiat::select(element < 0, -element, element) > 1;
+      }) |
+    vkpp::gpu::execute(context);
+  if (!float_out || !int_out || !uint_out || !many_out || !magnitude_out)
+  {
+    return false;
+  }
 
-  auto float_count = context.download(float_out->count);
-  auto int_count   = context.download(int_out->count);
-  auto uint_count  = context.download(uint_out->count);
-  auto many_count  = context.download(many_out->count);
-  if (!float_count || !int_count || !uint_count || !many_count)
+  auto float_count     = context.download(float_out->count);
+  auto int_count       = context.download(int_out->count);
+  auto uint_count      = context.download(uint_out->count);
+  auto many_count      = context.download(many_out->count);
+  auto magnitude_count = context.download(magnitude_out->count);
+  if (
+    !float_count || !int_count || !uint_count || !many_count || !magnitude_count)
   {
     return false;
   }
@@ -83,11 +96,13 @@ run_checks(vkpp::gpu::context& context) -> bool
   std::println("int > 0: {}", (*int_count)[ 0 ]);
   std::println("uint != 0: {}", (*uint_count)[ 0 ]);
   std::println("float 4096 > 0: {}", (*many_count)[ 0 ]);
+  std::println("int |x| > 1: {}", (*magnitude_count)[ 0 ]);
 
   return matches(context, *float_out, expected_floats) &&
          matches(context, *int_out, expected_ints) &&
          matches(context, *uint_out, expected_uints) &&
-         matches(context, *many_out, expected_many);
+         matches(context, *many_out, expected_many) &&
+         matches(context, *magnitude_out, expected_magnitudes);
 }
 
 } // namespace
