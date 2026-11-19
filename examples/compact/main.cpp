@@ -54,17 +54,19 @@ run_checks(vkpp::gpu::context& context) -> bool
 
   auto float_out =
     *gpu_floats |
-    fiat::compact(fiat::greater {}, 0.0F) |
+    vkpp::gpu::select(fiat::greater {}, 0.0F) |
     vkpp::gpu::execute(context);
   auto int_out =
-    *gpu_ints | fiat::compact(fiat::greater {}, 0) | vkpp::gpu::execute(context);
+    *gpu_ints |
+    vkpp::gpu::select(fiat::greater {}, 0) |
+    vkpp::gpu::execute(context);
   auto uint_out =
     *gpu_uints |
-    fiat::compact(fiat::not_equal {}, 0U) |
+    vkpp::gpu::select(fiat::not_equal {}, 0U) |
     vkpp::gpu::execute(context);
   auto many_out =
     *gpu_many |
-    fiat::compact(fiat::greater {}, 0.0F) |
+    vkpp::gpu::select(fiat::greater {}, 0.0F) |
     vkpp::gpu::execute(context);
   if (!float_out || !int_out || !uint_out || !many_out) { return false; }
 
